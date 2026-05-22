@@ -4,7 +4,7 @@
 // dev_server.py's "Save to Code" endpoints edit THIS file in place.
 
 
-const APP_VERSION = '0.2.0#526';
+const APP_VERSION = '0.2.0#527';
 
 const SCRAP_TYPES = [
 

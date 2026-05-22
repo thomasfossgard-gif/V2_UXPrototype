@@ -7,16 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This repo (`V2_UXPrototype`, folder `C:\CodingPractice\UXPrototypeV2`) is the **active development line**. It began on 2026-05-22 as a byte-for-byte copy of v1 (`APP_VERSION 0.1.2#522`).
 
 - **v1 is frozen** in a separate repo (`C:\CodingPractice\UXPrototype`, tag `v1.0-player-playable`) — a known-good playable build. Do not touch it. All new work happens HERE.
-- **Sequencing (agreed):** copy exact → verify ✅ → **modularize** → redesign. Don't modularize and redesign in the same step.
-- **Stage 2 (next): modularize** the ~24k-line single `index.html` (HTML+CSS+JS inline) into ES modules — no build step, browsers run native `import`/`export`. Seams already marked by `// ===== SECTION =====`. ⚠️ `dev_server.py`'s in-place patch endpoints (see table below) target text blocks inside `index.html`; they must be re-pointed when those blocks move into new files.
-- **Stage 3 — design direction (NOT built yet):** drop **chips & slots entirely** (removes Yard Shop chip buying, chip-fan hitboxes, `refreshChipRow`, `chipCount`, slot UI). Workers get job **TYPES/roles** ("carrier", "machinist") instead of parallel slots. Route assignment rethought to key off role, not chips. Explore **direct control** of workers — scaffolding exists (`state !== 'commanded'` already in the tick loop).
+- **Sequencing (agreed):** copy exact → verify ✅ → **modularize ✅** → redesign. Don't modularize and redesign in the same step.
+- **Stage 2 — DONE (branch `stage2-modularize`): modularized** the ~24k-line single `index.html`. CSS → `css/styles.css`; the JS was split along the `// ===== SECTION =====` seams into **ordered plain `<script src>` files in `js/`** (NOT ES modules — see [Code layout](#code-layout)). It's a behavior-preserving split: same code, same order, one shared global scope. The dev-server "Save to Code" endpoints were re-pointed from `index.html` to `js/config.data.js`. (Also cleaned out inert duplicated/corrupted trailing junk inherited from the v1 copy.)
+- **Stage 3 — design direction (NEXT, not built yet):** drop **chips & slots entirely** (removes Yard Shop chip buying, chip-fan hitboxes, `refreshChipRow`, `chipCount`, slot UI). Workers get job **TYPES/roles** ("carrier", "machinist") instead of parallel slots. Route assignment rethought to key off role, not chips. Explore **direct control** of workers — scaffolding exists (`state !== 'commanded'` already in the tick loop).
 - The owner is a senior 3D artist, sole maintainer, **no programming background** — give human explanations and warn before risky actions.
-
-> Note: the line-count "~10,700 lines" below is stale; `index.html` is ~24k lines.
 
 ## What This Project Is
 
-A single-page interactive UX prototype for a factory/logistics game — workers pick up scrap, follow routes, deposit into smelters. Built in vanilla JavaScript + Konva.js (2D canvas). The entire app lives in one file: **`index.html`** (~10,700 lines). There is no build step, no bundler, no framework.
+A single-page interactive UX prototype for a factory/logistics game — workers pick up scrap, follow routes, deposit into smelters. Built in vanilla JavaScript + Konva.js (2D canvas). There is no build step, no bundler, no framework. As of Stage 2 the app is split across files: **`index.html`** is now a thin shell (HTML markup + ordered `<script>` tags), the JavaScript lives in **`js/*.js`**, and the CSS in **`css/styles.css`**.
 
 ## Running the App
 
@@ -26,17 +24,20 @@ serve.bat
 
 Opens a Python dev server on port **8765**. Visit `http://localhost:8765` in a browser.
 
-The server does more than serve files — it intercepts POST requests to patch specific code blocks inside `index.html` in-place (no reload needed). These endpoints are:
+The server does more than serve files — it intercepts POST requests to patch specific code blocks **in `js/config.data.js`** in-place (no reload needed). Stage 2 gathered every settings block these endpoints edit into that one file, so the regex/marker logic is unchanged — only the target file moved (`DATA` in `dev_server.py`). These endpoints are:
 
-| Endpoint | What it patches in index.html |
+| Endpoint | What it patches (in `js/config.data.js`) |
 |---|---|
 | `/save-visual-styles` | `VISUAL_STYLES_DEFAULT` block |
-| `/save-gameplay-params` | `PATHFIND_PARAMS`, `SMELTER_PARAMS`, `WORKER_TIMINGS` |
-| `/save-worker-palette` | Worker template definitions |
-| `/save-worker-props` | Worker property metadata |
-| `/save-notes` | Writes `notes.json` |
+| `/save-gameplay-params` | `PATHFIND_PARAMS`, `SMELTER_PARAMS`, `WORKER_TIMINGS` (+ optional `MONEY_PARAMS`) |
+| `/save-worker-palette` | `palette.workers` array (also syncs `BUNDLED_LEVEL`) |
+| `/save-worker-props` | `palette.workers` + gameplay params in one shot |
+| `/save-thirst-params` | `THIRST_PARAMS` block |
+| `/save-talking` | `WORKER_STATE_CHATTER`, `CHILL_PHRASES`, chatter chance, bubble duration |
+| `/save-bundled-level` | `BUNDLED_LEVEL` block |
+| `/save-notes` | Writes `notes.json` (the only endpoint that doesn't touch `js/config.data.js`) |
 
-## Key Constants (top of index.html)
+## Key Constants (all in `js/config.data.js`, loaded first)
 
 | Constant | Purpose |
 |---|---|
@@ -50,6 +51,32 @@ The server does more than serve files — it intercepts POST requests to patch s
 | `BUNDLED_LEVEL` | Serialized default level (compact JSON embedded in code) |
 
 ## Architecture
+
+### Code layout
+
+After Stage 2 the JS is split into **plain classic `<script src>` files** (NOT ES modules — no `import`/`export`, no `type="module"`). They load **in order** and all share **one global scope**, exactly as when everything was inline: every function and the state arrays are mutually visible, and inline `onclick=` handlers still resolve. **Load order = original source order, and it matters** — `index.html` lists the tags in the required sequence; `js/config.data.js` is loaded first (so its data globals exist before any logic runs) and `js/init-notes.js` is last (it boots the app). The `// ===== SECTION =====` markers are preserved inside the files.
+
+Where the old sections now live (in load order):
+
+| File | Sections |
+|---|---|
+| `js/config.data.js` | All tunable data the dev server edits: `APP_VERSION`, `SCRAP_TYPES`, `palette`, `VISUAL_STYLES_DEFAULT`/`VISUAL_STYLES`, the `*_PARAMS`, chatter, `BUNDLED_LEVEL` |
+| `js/core.js` | STATE, VISUAL STYLES (state arrays), MODE SYSTEM, KONVA STAGE, PAN & ZOOM |
+| `js/palette-tools.js` | PALETTE UI, TOOL SELECTION, PALETTE DRAG-AND-DROP |
+| `js/scrap-smelter.js` | GROUND SCRAP, SMELTER |
+| `js/zones-nodes.js` | ZONE BLOB TOOL, PLACE / DRAW NODES |
+| `js/workers-place.js` | PLACE / DRAW WORKERS, LIFT DIM |
+| `js/routes.js` | ANCHOR DIRECTIONS, MINI-ANCHOR HELPERS, ROUTE DRAFTING / HOVER / RENDER |
+| `js/worker-jobs.js` | WORKER LIFTING & ASSIGNMENT, JOB PANEL HUD, CHIP THROW SYSTEM |
+| `js/panels.js` | DELETE / CONFIRM DIALOG, PROPERTY WINDOW, INSPECT PANEL, HINT |
+| `js/animation-pathfind.js` | SCRAP ARC ANIMATION, DEBUG OVERLAY, ANIMATION, A* PATHFINDER |
+| `js/auto-playback.js` | AUTO MODE, PLAYBACK |
+| `js/debug.js` | DEBUG PANEL, DEBUG CONSOLE, WORKER PROPS PANEL |
+| `js/save-engine.js` | LEVEL SAVE / LOAD, ENGINE MODE, META-CONTROLS |
+| `js/visuals-tab.js` | VISUALS TAB |
+| `js/init-notes.js` | INIT, NOTE PANEL CONTROLS, NOTE SYSTEM (**loaded last** — boots the app) |
+
+When adding a new file, insert its `<script>` tag in `index.html` at the right point in the sequence. Stage 3 (chips & slots removal) will mostly touch `js/worker-jobs.js`, `js/routes.js`, `js/workers-place.js`, and the worker data in `js/config.data.js`.
 
 ### Scene Graph (Konva layers, bottom to top)
 
@@ -95,7 +122,7 @@ All visual properties live in `VISUAL_STYLES_DEFAULT` and are cloned into `VISUA
 
 The panel auto-generates controls from key types: numbers → number input, booleans → checkbox, `rgba(...)`/`#hex` → colour picker, `fontFamily` → dropdown.
 
-The Visuals tab "Save to Code" button posts to `/save-visual-styles`, which rewrites `VISUAL_STYLES_DEFAULT` in `index.html` so tweaked values become the new defaults.
+The Visuals tab "Save to Code" button posts to `/save-visual-styles`, which rewrites `VISUAL_STYLES_DEFAULT` in `js/config.data.js` so tweaked values become the new defaults.
 
 ### Worker & Job System
 
@@ -122,8 +149,11 @@ The circular handle at the centre of each pile is called the **pile center ancho
 
 | File | Purpose |
 |---|---|
-| `index.html` | The entire app |
-| `dev_server.py` | Dev HTTP server with in-place patching |
+| `index.html` | Thin shell — HTML markup + ordered `<script>` tags (CDN, `js/config.data.js`, then the logic modules) |
+| `css/styles.css` | All app styles (extracted from the old inline `<style>`) |
+| `js/config.data.js` | Tunable data/config; the **only** file the dev server's Save endpoints rewrite |
+| `js/*.js` | The 14 logic modules — see [Code layout](#code-layout) for the section map |
+| `dev_server.py` | Dev HTTP server; static serving + in-place patching of `js/config.data.js` |
 | `serve.bat` | Starts the dev server |
 | `TODO.md` | Active task list (add entries with `[ ] Task [date time]` format) |
 | `saves/` | User-created level saves (JSON download/upload via browser) |
