@@ -29,7 +29,10 @@ if sys.platform == 'win32':
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
 ROOT = Path(__file__).parent.resolve()
-INDEX = ROOT / 'index.html'
+# Stage 2 modularization: the settings blocks the "Save to Code" endpoints
+# rewrite now live in js/config.data.js (extracted out of index.html). The
+# regex/marker logic below is unchanged — only the target file moved.
+DATA = ROOT / 'js' / 'config.data.js'
 NOTES = ROOT / 'notes.json'
 
 VS_BLOCK_PATTERN      = re.compile(r'const VISUAL_STYLES_DEFAULT = \{[\s\S]*?\n\};')
@@ -237,17 +240,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_error(404, 'Unknown endpoint')
 
     def _patch_index(self, data):
-        text = INDEX.read_text(encoding='utf-8')
+        text = DATA.read_text(encoding='utf-8')
         if not VS_BLOCK_PATTERN.search(text):
             raise RuntimeError('VISUAL_STYLES_DEFAULT block not found in index.html')
         body = js_serialize(data)
         new_block = 'const VISUAL_STYLES_DEFAULT = ' + body + ';'
         # lambda replacement so backslashes in JSON aren't interpreted as backreferences.
         new_text = VS_BLOCK_PATTERN.sub(lambda m: new_block, text, count=1)
-        INDEX.write_text(new_text, encoding='utf-8')
+        DATA.write_text(new_text, encoding='utf-8')
 
     def _patch_worker_palette(self, workers_data):
-        text = INDEX.read_text(encoding='utf-8')
+        text = DATA.read_text(encoding='utf-8')
         text = _replace_workers_array(text, js_serialize(workers_data))
         # Also sync BUNDLED_LEVEL's palette.workers so page reload doesn't revert changes.
         bl_match = BUNDLED_LEVEL_PATTERN.search(text)
@@ -265,7 +268,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 )
             except Exception as e:
                 raise RuntimeError(f'BUNDLED_LEVEL patch failed: {e}')
-        INDEX.write_text(text, encoding='utf-8')
+        DATA.write_text(text, encoding='utf-8')
 
     def _patch_worker_props(self, data):
         workers_data = data.get('workers')
@@ -275,7 +278,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         money    = data.get('money')
         if workers_data is None or pathfind is None or smelter is None or worker is None:
             raise ValueError("Expected {workers: [...], pathfind: {...}, smelter: {...}, worker: {...}}")
-        text = INDEX.read_text(encoding='utf-8')
+        text = DATA.read_text(encoding='utf-8')
         # Patch palette.workers
         text = _replace_workers_array(text, js_serialize(workers_data))
         # Sync BUNDLED_LEVEL palette.workers
@@ -314,18 +317,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if thirst is not None and THIRST_PARAMS_PATTERN.search(text):
             text = THIRST_PARAMS_PATTERN.sub(
                 lambda m: 'const THIRST_PARAMS = ' + js_serialize(thirst) + ';', text, count=1)
-        INDEX.write_text(text, encoding='utf-8')
+        DATA.write_text(text, encoding='utf-8')
 
     def _patch_bundled_level(self, level_data):
-        text = INDEX.read_text(encoding='utf-8')
+        text = DATA.read_text(encoding='utf-8')
         new_bl = json.dumps(level_data, separators=(',', ':'), ensure_ascii=False)
         text, n = BUNDLED_LEVEL_PATTERN.subn(lambda m: m.group(1) + new_bl + ';', text, count=1)
         if n == 0:
             raise ValueError('BUNDLED_LEVEL not found in index.html')
-        INDEX.write_text(text, encoding='utf-8')
+        DATA.write_text(text, encoding='utf-8')
 
     def _patch_gameplay_params(self, data):
-        text = INDEX.read_text(encoding='utf-8')
+        text = DATA.read_text(encoding='utf-8')
         pathfind = data.get('pathfind')
         smelter  = data.get('smelter')
         worker   = data.get('worker')
@@ -347,18 +350,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if money is not None and MONEY_PARAMS_PATTERN.search(text):
             text = MONEY_PARAMS_PATTERN.sub(
                 lambda m: 'const MONEY_PARAMS = ' + js_serialize(money) + ';', text, count=1)
-        INDEX.write_text(text, encoding='utf-8')
+        DATA.write_text(text, encoding='utf-8')
 
     def _patch_thirst_params(self, data):
         thirst = data.get('thirst')
         if thirst is None:
             raise ValueError("Expected {thirst: {...}}")
-        text = INDEX.read_text(encoding='utf-8')
+        text = DATA.read_text(encoding='utf-8')
         if not THIRST_PARAMS_PATTERN.search(text):
             raise RuntimeError('THIRST_PARAMS block not found in index.html')
         text = THIRST_PARAMS_PATTERN.sub(
             lambda m: 'const THIRST_PARAMS = ' + js_serialize(thirst) + ';', text, count=1)
-        INDEX.write_text(text, encoding='utf-8')
+        DATA.write_text(text, encoding='utf-8')
 
     def _patch_talking(self, data):
         chatter         = data.get('chatter')
@@ -368,7 +371,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         workers_data    = data.get('workers')
         if any(v is None for v in [chatter, chill_phrases, chill_chance, bubble_duration]):
             raise ValueError('Expected {chatter, chill_phrases, chill_chance, bubble_duration}')
-        text = INDEX.read_text(encoding='utf-8')
+        text = DATA.read_text(encoding='utf-8')
         if not WORKER_CHATTER_PATTERN.search(text):
             raise RuntimeError('WORKER_STATE_CHATTER block not found')
         if not CHILL_PHRASES_PATTERN.search(text):
@@ -400,7 +403,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         lambda m: m.group(1) + new_bl + ';', text, count=1)
                 except Exception as e:
                     raise RuntimeError(f'BUNDLED_LEVEL patch failed: {e}')
-        INDEX.write_text(text, encoding='utf-8')
+        DATA.write_text(text, encoding='utf-8')
 
     def _json_response(self, code, body):
         payload = json.dumps(body).encode('utf-8')
@@ -417,13 +420,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 def main():
     server = http.server.ThreadingHTTPServer(('', PORT), Handler)
     print(f'Serving {ROOT} on http://localhost:{PORT}')
-    print('  POST /save-visual-styles   -> writes index.html (VISUAL_STYLES_DEFAULT)')
-    print('  POST /save-gameplay-params -> writes index.html (PATHFIND_PARAMS + SMELTER_PARAMS + WORKER_TIMINGS)')
-    print('  POST /save-worker-palette  -> writes index.html (palette.workers)')
-    print('  POST /save-worker-props    -> writes index.html (palette.workers + gameplay params in one shot)')
-    print('  POST /save-talking         -> writes index.html (WORKER_STATE_CHATTER + CHILL_PHRASES + chance + bubble duration)')
+    print('  POST /save-visual-styles   -> writes js/config.data.js (VISUAL_STYLES_DEFAULT)')
+    print('  POST /save-gameplay-params -> writes js/config.data.js (PATHFIND_PARAMS + SMELTER_PARAMS + WORKER_TIMINGS)')
+    print('  POST /save-worker-palette  -> writes js/config.data.js (palette.workers)')
+    print('  POST /save-worker-props    -> writes js/config.data.js (palette.workers + gameplay params in one shot)')
+    print('  POST /save-talking         -> writes js/config.data.js (WORKER_STATE_CHATTER + CHILL_PHRASES + chance + bubble duration)')
     print('  POST /save-notes           -> writes notes.json')
-    print('  POST /save-bundled-level   -> writes index.html (BUNDLED_LEVEL)')
+    print('  POST /save-bundled-level   -> writes js/config.data.js (BUNDLED_LEVEL)')
     print('Ctrl+C to stop.')
     try:
         server.serve_forever()
