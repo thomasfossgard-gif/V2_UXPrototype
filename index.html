@@ -1896,7 +1896,7 @@ const palette = {
 
 };
 
-const APP_VERSION = '0.1.2#522';
+const APP_VERSION = '0.2.0#523';
 
 
 
@@ -24453,110 +24453,3 @@ document.getElementById('note-list-btn').addEventListener('click', () => {
 </body>
 
 </html>
-
-st btn = document.getElementById('note-list-btn');
-
-  noteListOpen = !noteListOpen;
-
-  btn.classList.toggle('active', noteListOpen);
-
-  if (noteListOpen) {
-
-    const notePanel = document.getElementById('note-panel');
-
-    const r = notePanel.getBoundingClientRect();
-
-    panel.style.top  = (r.bottom + 6) + 'px';
-
-    panel.style.left = r.left + 'px';
-
-    panel.hidden = false;
-
-    renderNoteList();
-
-  } else {
-
-    panel.hidden = true;
-
-  }
-
-});
-
-
-
-
-
-</script>
-
-
-
-
-
-</body>
-
-</html>
-
->
-
-  panel.style.left = r.left + 'px';
-
-    panel.hidden = false;
-
-    renderNoteList();
-
-  } else {
-
-    panel.hidden = true;
-
-  }
-
-});
-
-
-
-
-
-</script>
-
-
-
-
-
-</body>
-
-</html>
-
->
-
-
-
-  panel.style.left = r.left + 'px';
-
-    panel.hidden = false;
-
-    renderNoteList();
-
-  } else {
-
-    panel.hidden = true;
-
-  }
-
-});
-
-
-
-
-
-</script>
-
-
-
-
-
-</body>
-
-</html>
-
->
-
