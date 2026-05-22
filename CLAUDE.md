@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚑ THIS IS V2 — read first
+
+This repo (`V2_UXPrototype`, folder `C:\CodingPractice\UXPrototypeV2`) is the **active development line**. It began on 2026-05-22 as a byte-for-byte copy of v1 (`APP_VERSION 0.1.2#522`).
+
+- **v1 is frozen** in a separate repo (`C:\CodingPractice\UXPrototype`, tag `v1.0-player-playable`) — a known-good playable build. Do not touch it. All new work happens HERE.
+- **Sequencing (agreed):** copy exact → verify ✅ → **modularize** → redesign. Don't modularize and redesign in the same step.
+- **Stage 2 (next): modularize** the ~24k-line single `index.html` (HTML+CSS+JS inline) into ES modules — no build step, browsers run native `import`/`export`. Seams already marked by `// ===== SECTION =====`. ⚠️ `dev_server.py`'s in-place patch endpoints (see table below) target text blocks inside `index.html`; they must be re-pointed when those blocks move into new files.
+- **Stage 3 — design direction (NOT built yet):** drop **chips & slots entirely** (removes Yard Shop chip buying, chip-fan hitboxes, `refreshChipRow`, `chipCount`, slot UI). Workers get job **TYPES/roles** ("carrier", "machinist") instead of parallel slots. Route assignment rethought to key off role, not chips. Explore **direct control** of workers — scaffolding exists (`state !== 'commanded'` already in the tick loop).
+- The owner is a senior 3D artist, sole maintainer, **no programming background** — give human explanations and warn before risky actions.
+
+> Note: the line-count "~10,700 lines" below is stale; `index.html` is ~24k lines.
+
 ## What This Project Is
 
 A single-page interactive UX prototype for a factory/logistics game — workers pick up scrap, follow routes, deposit into smelters. Built in vanilla JavaScript + Konva.js (2D canvas). The entire app lives in one file: **`index.html`** (~10,700 lines). There is no build step, no bundler, no framework.
